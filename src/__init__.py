@@ -1,0 +1,2 @@
+"""IEEE RAS AI Knowledge Assistant - Core Package"""
+__version__ = "1.0.0"
