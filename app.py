@@ -205,7 +205,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# App State & Pipeline Initialization
+# App State
 # -----------------------------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -213,9 +213,34 @@ if "messages" not in st.session_state:
 if "pending_query" not in st.session_state:
     st.session_state.pending_query = None
 
-# Retrieve retriever & pipeline instances
-retriever = get_retriever()
-env_key = os.getenv("GEMINI_API_KEY", "")
+# -----------------------------------------------------------------------------
+# Main Header (Rendered immediately so page is never blank)
+# -----------------------------------------------------------------------------
+st.markdown("""
+<div class="main-header">
+    <div class="header-title">
+        IEEE RAS AI Knowledge Assistant
+        <span class="header-badge">RAG Powered</span>
+    </div>
+    <div class="header-subtitle">
+        Ask questions about IEEE Robotics and Automation Society using publicly available information.
+    </div>
+    <div class="header-disclaimer">
+        Community-built RAG assistant using publicly available IEEE RAS information. Not an official IEEE RAS service.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# Cached RAG Pipeline Initialization (Shows friendly progress indicator)
+# -----------------------------------------------------------------------------
+@st.cache_resource(show_spinner="⚡ Initializing IEEE RAS Vector Knowledge Base & AI Model...")
+def load_rag_components():
+    r = get_retriever()
+    p = get_rag_pipeline()
+    return r, p
+
+retriever, pipeline = load_rag_components()
 
 # -----------------------------------------------------------------------------
 # Sidebar
@@ -281,27 +306,6 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.pending_query = None
         st.rerun()
-
-# Instantiate RAG Pipeline with environment key
-pipeline = get_rag_pipeline(api_key=env_key)
-
-# -----------------------------------------------------------------------------
-# Main Header
-# -----------------------------------------------------------------------------
-st.markdown("""
-<div class="main-header">
-    <div class="header-title">
-        IEEE RAS AI Knowledge Assistant
-        <span class="header-badge">RAG Powered</span>
-    </div>
-    <div class="header-subtitle">
-        Ask questions about IEEE Robotics and Automation Society using publicly available information.
-    </div>
-    <div class="header-disclaimer">
-        Community-built RAG assistant using publicly available IEEE RAS information. Not an official IEEE RAS service.
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # Empty State / Feature Highlights
