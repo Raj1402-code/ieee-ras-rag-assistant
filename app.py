@@ -13,6 +13,9 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.config import DEFAULT_GEMINI_MODEL, EMBEDDING_MODEL_NAME
 from src.retriever import get_retriever
 from src.rag import get_rag_pipeline
@@ -272,32 +275,6 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # API Key Configuration
-    st.markdown('<div class="sidebar-section-title">API Configuration</div>', unsafe_allow_html=True)
-    if env_key:
-        st.caption("✅ **API Key Connected** (Loaded permanently)")
-        with st.expander("⚙️ Override API Key", expanded=False):
-            override_key = st.text_input(
-                "Temporary API Key",
-                value="",
-                type="password",
-                placeholder="Enter alternate key..."
-            )
-        active_key = override_key.strip() if override_key and override_key.strip() else env_key
-    else:
-        current_key = st.session_state.get("custom_api_key", "")
-        user_api_key = st.text_input(
-            "Google Gemini API Key",
-            value=current_key,
-            type="password",
-            placeholder="Enter AI Studio API Key..."
-        )
-        active_key = user_api_key.strip()
-        if active_key and len(active_key) > 8:
-            st.caption("✅ Gemini API Key Active")
-        else:
-            st.caption("⚠️ Key missing (Context-only mode)")
-
     # Clear Chat Button
     st.markdown("---")
     if st.button("🗑️ Clear Conversation", use_container_width=True):
@@ -305,8 +282,8 @@ with st.sidebar:
         st.session_state.pending_query = None
         st.rerun()
 
-# Instantiate RAG Pipeline with active key
-pipeline = get_rag_pipeline(api_key=active_key)
+# Instantiate RAG Pipeline with environment key
+pipeline = get_rag_pipeline(api_key=env_key)
 
 # -----------------------------------------------------------------------------
 # Main Header
