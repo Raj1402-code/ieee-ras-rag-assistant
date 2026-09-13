@@ -27,7 +27,7 @@ TOP_K_RETRIEVAL = 4
 SIMILARITY_THRESHOLD = 0.30  # Min cosine similarity threshold to consider relevant
 
 # LLM settings
-DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Chunking parameters

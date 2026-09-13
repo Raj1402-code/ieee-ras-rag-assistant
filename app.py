@@ -32,13 +32,6 @@ st.set_page_config(
 # -----------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* Main Background & Text */
-    .stApp {
-        background-color: #0b0f19;
-        color: #e2e8f0;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
     /* Custom Header Styling */
     .main-header {
         background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(30, 41, 59, 0.4) 100%);

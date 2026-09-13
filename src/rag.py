@@ -146,39 +146,60 @@ INSTRUCTIONS FOR ANSWER:
         # Step 4: Call Gemini LLM with context
         prompt = self._build_context_prompt(cleaned_query, chunks)
 
-        try:
-            config = types.GenerateContentConfig(
-                system_instruction=RAG_SYSTEM_INSTRUCTION,
-                temperature=0.15,  # Low temperature for strict factual grounding
-                max_output_tokens=1200
-            )
-            
-            response = self._client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=config
-            )
+        # List of candidate models to try in order
+        candidate_models = [self.model_name]
+        for fallback in ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]:
+            if fallback not in candidate_models:
+                candidate_models.append(fallback)
 
-            generated_answer = response.text if response and response.text else "Unable to generate a response from the model."
+        config = types.GenerateContentConfig(
+            system_instruction=RAG_SYSTEM_INSTRUCTION,
+            temperature=0.15,  # Low temperature for strict factual grounding
+            max_output_tokens=1200
+        )
 
-            return {
-                "answer": generated_answer,
-                "sources": unique_sources,
-                "retrieved_chunks": chunks,
-                "is_relevant": True,
-                "similarity_score": max_score
-            }
+        last_error = None
+        for model in candidate_models:
+            try:
+                logger.info("Attempting generation with model: %s", model)
+                response = self._client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=config
+                )
 
-        except Exception as e:
-            logger.error("Gemini generation failed: %s", e)
-            return {
-                "answer": f"An error occurred while generating the response from Gemini: `{str(e)}`.\n\nPlease check your API key quota or network connectivity.",
-                "sources": unique_sources,
-                "retrieved_chunks": chunks,
-                "is_relevant": True,
-                "similarity_score": max_score,
-                "error": str(e)
-            }
+                generated_answer = response.text if response and response.text else "Unable to generate a response from the model."
+                self.model_name = model  # Lock in the working model
+
+                return {
+                    "answer": generated_answer,
+                    "sources": unique_sources,
+                    "retrieved_chunks": chunks,
+                    "is_relevant": True,
+                    "similarity_score": max_score,
+                    "model_used": model
+                }
+
+            except Exception as e:
+                err_msg = str(e)
+                logger.warning("Generation with model %s failed: %s", model, err_msg)
+                last_error = e
+                # If it's a 404 NOT_FOUND, try the next model in the candidate list
+                if "404" in err_msg or "NOT_FOUND" in err_msg or "not found" in err_msg.lower():
+                    continue
+                else:
+                    # For quota or auth issues, break immediately
+                    break
+
+        logger.error("All Gemini model attempts failed. Last error: %s", last_error)
+        return {
+            "answer": f"An error occurred while generating the response from Gemini: `{str(last_error)}`.\n\nPlease verify your API key quota or network connectivity.",
+            "sources": unique_sources,
+            "retrieved_chunks": chunks,
+            "is_relevant": True,
+            "similarity_score": max_score,
+            "error": str(last_error)
+        }
 
 
 _rag_pipeline_instance = None
