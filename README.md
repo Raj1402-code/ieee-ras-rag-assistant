@@ -140,7 +140,7 @@ ieee-ras-rag-assistant/
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/ieee-ras-rag-assistant.git
+git clone https://github.com/thisanthrs-debug/ieee-ras-rag-assistant.git
 cd ieee-ras-rag-assistant
 ```
 
