@@ -274,22 +274,29 @@ with st.sidebar:
 
     # API Key Configuration
     st.markdown('<div class="sidebar-section-title">API Configuration</div>', unsafe_allow_html=True)
-    current_key = st.session_state.get("custom_api_key", env_key)
-    user_api_key = st.text_input(
-        "Google Gemini API Key",
-        value=current_key,
-        type="password",
-        help="Reads GEMINI_API_KEY from environment or enter directly.",
-        placeholder="Enter AI Studio API Key..."
-    )
-    if user_api_key != current_key:
-        st.session_state.custom_api_key = user_api_key
-
-    active_key = user_api_key if user_api_key else env_key
-    if active_key and len(active_key) > 8:
-        st.caption("✅ Gemini API Key Active")
+    if env_key:
+        st.caption("✅ **API Key Connected** (Loaded permanently)")
+        with st.expander("⚙️ Override API Key", expanded=False):
+            override_key = st.text_input(
+                "Temporary API Key",
+                value="",
+                type="password",
+                placeholder="Enter alternate key..."
+            )
+        active_key = override_key.strip() if override_key and override_key.strip() else env_key
     else:
-        st.caption("⚠️ Running in Context-Only Mode (Key Missing)")
+        current_key = st.session_state.get("custom_api_key", "")
+        user_api_key = st.text_input(
+            "Google Gemini API Key",
+            value=current_key,
+            type="password",
+            placeholder="Enter AI Studio API Key..."
+        )
+        active_key = user_api_key.strip()
+        if active_key and len(active_key) > 8:
+            st.caption("✅ Gemini API Key Active")
+        else:
+            st.caption("⚠️ Key missing (Context-only mode)")
 
     # Clear Chat Button
     st.markdown("---")
