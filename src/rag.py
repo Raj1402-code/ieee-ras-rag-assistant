@@ -82,7 +82,15 @@ INSTRUCTIONS FOR ANSWER:
 """
         return prompt
 
-    def answer_question(self, query: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    def answer_question(
+        self,
+        query: str,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        temperature: float = 0.15,
+        top_k: int = 4,
+        similarity_threshold: float = 0.30,
+        max_output_tokens: int = 1200
+    ) -> Dict[str, Any]:
         """
         Execute the full RAG pipeline:
         Retrieve -> Verify Relevance -> Format Context -> Call Gemini -> Return Answer & Citations.
@@ -94,11 +102,16 @@ INSTRUCTIONS FOR ANSWER:
                 "sources": [],
                 "retrieved_chunks": [],
                 "is_relevant": False,
-                "similarity_score": 0.0
+                "similarity_score": 0.0,
+                "follow_up_questions": []
             }
 
         # Step 1: Vector similarity retrieval
-        retrieval_res = self.retriever.retrieve(cleaned_query)
+        retrieval_res = self.retriever.retrieve(
+            cleaned_query,
+            top_k=top_k,
+            threshold=similarity_threshold
+        )
         chunks = retrieval_res.get("chunks", [])
         is_relevant = retrieval_res.get("is_relevant", False)
         max_score = retrieval_res.get("max_score", 0.0)
@@ -120,7 +133,8 @@ INSTRUCTIONS FOR ANSWER:
                 "sources": [],
                 "retrieved_chunks": chunks,
                 "is_relevant": False,
-                "similarity_score": max_score
+                "similarity_score": max_score,
+                "follow_up_questions": []
             }
 
         unique_sources = deduplicate_sources(chunks)
@@ -140,7 +154,8 @@ INSTRUCTIONS FOR ANSWER:
                 "sources": unique_sources,
                 "retrieved_chunks": chunks,
                 "is_relevant": True,
-                "similarity_score": max_score
+                "similarity_score": max_score,
+                "follow_up_questions": []
             }
 
         # Step 4: Call Gemini LLM with context
@@ -154,8 +169,8 @@ INSTRUCTIONS FOR ANSWER:
 
         config = types.GenerateContentConfig(
             system_instruction=RAG_SYSTEM_INSTRUCTION,
-            temperature=0.15,  # Low temperature for strict factual grounding
-            max_output_tokens=1200
+            temperature=temperature,
+            max_output_tokens=max_output_tokens
         )
 
         last_error = None
@@ -171,13 +186,29 @@ INSTRUCTIONS FOR ANSWER:
                 generated_answer = response.text if response and response.text else "Unable to generate a response from the model."
                 self.model_name = model  # Lock in the working model
 
+                # Generate follow-up questions
+                follow_up_questions = []
+                try:
+                    follow_up_prompt = (
+                        f"Based on the following user query: '{cleaned_query}' and your response: '{generated_answer[:500]}...', "
+                        f"generate 3 short, relevant follow-up questions the user might ask next. "
+                        f"Return them as a simple newline-separated list, without any numbering or intro text."
+                    )
+                    fu_config = types.GenerateContentConfig(temperature=0.7, max_output_tokens=150)
+                    fu_resp = self._client.models.generate_content(model="gemini-3.6-flash", contents=follow_up_prompt, config=fu_config)
+                    if fu_resp and fu_resp.text:
+                        follow_up_questions = [q.strip("- *").strip() for q in fu_resp.text.strip().split('\n') if q.strip()][:3]
+                except Exception as e:
+                    logger.warning("Failed to generate follow-up questions: %s", e)
+
                 return {
                     "answer": generated_answer,
                     "sources": unique_sources,
                     "retrieved_chunks": chunks,
                     "is_relevant": True,
                     "similarity_score": max_score,
-                    "model_used": model
+                    "model_used": model,
+                    "follow_up_questions": follow_up_questions
                 }
 
             except Exception as e:
@@ -198,7 +229,8 @@ INSTRUCTIONS FOR ANSWER:
             "retrieved_chunks": chunks,
             "is_relevant": True,
             "similarity_score": max_score,
-            "error": str(last_error)
+            "error": str(last_error),
+            "follow_up_questions": []
         }
 
 

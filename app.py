@@ -213,14 +213,22 @@ if "messages" not in st.session_state:
 if "pending_query" not in st.session_state:
     st.session_state.pending_query = None
 
+# Sidebar Advanced Settings State
+if "rag_temperature" not in st.session_state:
+    st.session_state.rag_temperature = 0.15
+if "rag_top_k" not in st.session_state:
+    st.session_state.rag_top_k = 4
+if "rag_threshold" not in st.session_state:
+    st.session_state.rag_threshold = 0.30
+
 # -----------------------------------------------------------------------------
 # Main Header (Rendered immediately so page is never blank)
 # -----------------------------------------------------------------------------
 st.markdown("""
-<div class="main-header">
+<div class="main-header" style="margin-bottom: 12px;">
     <div class="header-title">
         IEEE RAS AI Knowledge Assistant
-        <span class="header-badge">RAG Powered</span>
+        <span class="header-badge" style="animation: pulse 2s infinite;">RAG Powered</span>
     </div>
     <div class="header-subtitle">
         Ask questions about IEEE Robotics and Automation Society using publicly available information.
@@ -230,6 +238,20 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# Top Metrics Dashboard
+# -----------------------------------------------------------------------------
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric(label="Knowledge Base Size", value="150+ Chunks")
+with col2:
+    st.metric(label="Embeddings", value="all-MiniLM-L6-v2")
+with col3:
+    st.metric(label="Active LLM", value="Gemini Flash")
+with col4:
+    st.metric(label="Status", value="Online 🟢")
+
 
 # -----------------------------------------------------------------------------
 # Cached RAG Pipeline Initialization (Shows friendly progress indicator)
@@ -287,6 +309,24 @@ with st.sidebar:
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+    # Advanced Settings Expander
+    with st.expander("⚙️ Advanced RAG Settings", expanded=False):
+        st.session_state.rag_temperature = st.slider(
+            "LLM Temperature", 
+            min_value=0.0, max_value=1.0, value=st.session_state.rag_temperature, step=0.05,
+            help="Higher values make output more creative, lower values make it strictly factual."
+        )
+        st.session_state.rag_top_k = st.slider(
+            "Top-K Chunks to Retrieve", 
+            min_value=1, max_value=10, value=st.session_state.rag_top_k, step=1,
+            help="Number of context chunks injected into the LLM prompt."
+        )
+        st.session_state.rag_threshold = st.slider(
+            "Similarity Threshold", 
+            min_value=0.0, max_value=1.0, value=st.session_state.rag_threshold, step=0.05,
+            help="Minimum cosine similarity required to consider a chunk relevant."
+        )
 
     # Knowledge Base Telemetry
     st.markdown('<div class="sidebar-section-title">Knowledge Base</div>', unsafe_allow_html=True)
@@ -392,11 +432,17 @@ if user_query:
     # 2. Generate response via RAG pipeline
     with st.chat_message("assistant"):
         with st.spinner("Searching IEEE RAS knowledge base and generating answer..."):
-            result = pipeline.answer_question(user_query)
+            result = pipeline.answer_question(
+                user_query,
+                temperature=st.session_state.rag_temperature,
+                top_k=st.session_state.rag_top_k,
+                similarity_threshold=st.session_state.rag_threshold
+            )
             answer_text = result["answer"]
             chunks = result.get("retrieved_chunks", [])
             sources = result.get("sources", [])
             similarity_score = result.get("similarity_score", 0.0)
+            follow_ups = result.get("follow_up_questions", [])
 
             st.markdown(answer_text)
 
@@ -404,6 +450,7 @@ if user_query:
             if chunks:
                 with st.expander("🔍 Retrieved Sources & Transparency", expanded=False):
                     st.caption(f"Top Similarity Score: **{similarity_score * 100:.1f}%** | Chunks Retrieved: **{len(chunks)}**")
+                    st.progress(min(similarity_score, 1.0))
                     for i, chunk in enumerate(chunks, 1):
                         score_pct = chunk.get("similarity_score", 0.0) * 100
                         st.markdown(f"**[{i}] [{chunk.get('title', 'Source')}]({chunk.get('url', '#')})** — *Relevance: {score_pct:.1f}%*")
@@ -417,11 +464,23 @@ if user_query:
                     sources_html += f'<a class="source-badge" href="{s["url"]}" target="_blank">🌐 {s["title"]}</a> '
                 st.markdown(sources_html, unsafe_allow_html=True)
 
+            # Follow-up questions buttons
+            if follow_ups:
+                st.markdown("<br>**Suggested Follow-ups:**", unsafe_allow_html=True)
+                # Need to use standard buttons for follow ups but since they're in a container, columns are better
+                fu_cols = st.columns(len(follow_ups))
+                for idx, fuq in enumerate(follow_ups):
+                    with fu_cols[idx]:
+                        if st.button(fuq, key=f"fu_{len(st.session_state.messages)}_{idx}", use_container_width=True):
+                            st.session_state.pending_query = fuq
+                            st.rerun()
+
     # 3. Save assistant message to session state
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer_text,
         "chunks": chunks,
         "sources": sources,
-        "similarity_score": similarity_score
+        "similarity_score": similarity_score,
+        "follow_ups": follow_ups
     })
